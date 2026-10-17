@@ -2,17 +2,17 @@
 
 Sayfadaki video öğelerini, bağlantıları ve video ağ yanıtlarını algılayan Manifest V3 Chrome eklentisi. Arayüz Türkçedir. Chrome 110+ gerekir.
 
-## 0.2.0: küçük dosya sorunu ve ayrıntılı tarama
+## 0.3.0: akışların yanlışlıkla gizlenmesini düzeltme
 
-- Listeye yalnızca toplam boyutu **en az 10.000.000 bayt (10 MB)** doğrulanmış video dosyaları alınır. Küçük dosyalar ve boyutu bilinmeyen bağlantılar gizlenir; sayıları arayüzde açıklanır.
+- **Boyutu bilinen ve 10.000.000 bayttan (10 MB) küçük olan dosyalar gizlenir.** HLS/DASH akışları ve boyutu bilinmeyen video kaynakları görünür kalır; toplam boyutun bilinmediği açıkça yazılır. Önceki 0.2.0 sürümü boyutu bilinmeyen kaynakları da gizleyerek bulunan akışları listeden çıkarıyordu. Algılama ile doğrudan indirilebilirlik artık ayrı kontrol edilir.
 - `206 Partial Content` yanıtında parça boyutu yerine `Content-Range` toplamı okunur. Sıkıştırılmış yanıtların aktarım boyutu tam video boyutu sayılmaz.
 - Gerekirse HEAD, ardından `Range: bytes=0-63` isteğiyle boyut kontrolü yapılır. Sunucu Range'i yok saysa da gövde okuması başlangıçtan sonra iptal edilir. İndirme öncesinde MP4/WebM/OGG/AVI/FLV/MPEG/TS gibi kapsayıcıların başlangıç imzası kontrol edilir; HTML/JSON hata yanıtları reddedilir. Bu imza kontrolü tam dosyanın bozulmadığını garanti etmez.
 - Chrome ile başlatılan indirmelerde gerçek indirilen yanıt küçük veya HTML/JSON çıkarsa indirme iptal edilir; tamamlanmış küçük dosya otomatik kaldırılmaya çalışılır. Temizleme başarısızlığı yeniden taramada bildirilir. Bu izleme yerel yardımcı indirmelerini kapsamaz.
-- Erişilebilir iframe'lere ek olarak açık shadow DOM, `data-video-*` alanları, Open Graph meta verisi, JSON-LD ve performans kayıtları taranır. En fazla 100 kaynak saklanır; her taramada en fazla 24 kaynak kontrol edilir, en fazla 6 paralel istek kullanılır; istek başına 4 saniye zaman aşımı vardır. Yeni belirsiz kaynaklar için yeniden tarama yapılabilir.
-- HLS/DASH manifest dosyasının birkaç KB olması videonun küçük olduğu anlamına gelmez. Manifest boyutu video boyutu sayılmaz. Toplam medya boyutu doğrulanamadığı için bu bağlantılar listeden gizlenir; sayfanın yardımcıyla indirilmesi ayrı bir seçenektir.
+- Açılır pencere kapalıyken de video başlangıcı, kaynak değişiklikleri ve performans kayıtları gözlenir. Uzantısız video adresleri, sorgu parametresinde dosya/akış türü ve sayfanın satır içi oynatıcı yapılandırmasındaki düz video URL'leri tanınır. Sayfa JavaScript'i çalıştırılmaz. Erişilebilir iframe'lere ek olarak açık shadow DOM, `data-video-*` alanları, Open Graph meta verisi, JSON-LD ve performans kayıtları taranır. En fazla 100 kaynak saklanır; her taramada en fazla 24 kaynak kontrol edilir, en fazla 6 paralel istek kullanılır; istek başına 4 saniye zaman aşımı vardır. Yeni belirsiz kaynaklar için yeniden tarama yapılabilir.
+- HLS/DASH manifest dosyasının birkaç KB olması videonun küçük olduğu anlamına gelmez. Manifest boyutu video boyutu sayılmaz. Bu bağlantılar akış olarak listelenir ve yardımcıyla indirilebilir; manifestin kendisi küçük video dosyası gibi kaydedilmez. Boyutu bilinmeyen dosyalar da yardımcıya yönlendirilir; doğrudan Chrome indirmesi için boyut ve video imzası doğrulaması gerekir.
 - En fazla 256 KiB manifest metninde Widevine, PlayReady, FairPlay ve genel koruma işaretleri aranır. Tarayıcıdaki `encrypted` olayları ve mevcut `mediaKeys` durumu da raporlanır. Bu yalnızca bir göstergedir: DRM bulunmadığını kesin olarak ispatlamaz, anahtar/lisans almaz ve koruma aşmaz. HLS ana manifestinde görünmeyip alt listelerde bulunan DRM işaretleri kaçabilir. AES-128 tek başına DRM olarak etiketlenmez.
 
-Güncellerken `chrome://extensions` sayfasında eklentinin **Yeniden yükle** düğmesine basın, ardından video sayfasını yenileyip videoyu oynatın. Yeni şifreli medya dinleyicisi sayfa yenilenmeden eski açık sekmelere eklenmez.
+Güncellerken `chrome://extensions` sayfasında eklentinin **Yeniden yükle** düğmesine basın, ardından video sayfasını yenileyip videoyu oynatın. Yeni canlı gözlem dinleyicileri sayfa yenilenmeden eski açık sekmelere eklenmez. Aynı extension klasörünü güncelleyin; eklentiyi kaldırıp farklı klasörden eklemek kimliği değiştirebilir. Yerel yardımcı kodu bu sürümde değişmediğinden EXE'yi tekrar oluşturmak gerekmez.
 
 
 - MP4, WebM, MOV, OGV, M4V, MKV, AVI, FLV, MPEG, 3GP ve TS dosyalarını doğrudan Chrome ile indirme.
@@ -89,7 +89,7 @@ python3 tests/prepare_fixture.py
 .venv/bin/python tests/native_test.py
 ```
 
-`test:ui` sistem Chromium'unu kullanır (`CHROME_PATH` ile değiştirilebilir), Chrome API'si simüle edilir. Gerçek DOM, shadow DOM, JSON-LD ve meta taraması; 10 MB filtresi, DRM gösterimi, indirme düğmeleri, hata/boş durum ve HTML enjeksiyonuna karşı metin gösterimi kontrol edilir. HTTP testleri yerel sunucuyla HEAD/Range, 206 toplam boyutu, sahte HTML/video yanıtları ve örnek DRM manifestlerini doğrular; ticari DRM servislerinde test yapılmamıştır. Native test gerçek yerel HLS videosunu indirir ve FFprobe ile doğrular.
+`test:ui` sistem Chromium'unu kullanır (`CHROME_PATH` ile değiştirilebilir), Chrome API'si simüle edilir. Gerçek DOM, shadow DOM, JSON-LD ve meta taraması; canlı kaynak gözlemi, HLS/DASH ve bilinmeyen boyutun görünürlüğü, 10 MB filtresi, DRM gösterimi, indirme düğmeleri, hata/boş durum ve HTML enjeksiyonuna karşı metin gösterimi kontrol edilir. HTTP testleri yerel sunucuyla HEAD/Range, 206 toplam boyutu, sahte HTML/video yanıtları ve örnek DRM manifestlerini doğrular; ticari DRM servislerinde test yapılmamıştır. Native test gerçek yerel HLS videosunu indirir ve FFprobe ile doğrular.
 
 ```sh
 npm run test:extension

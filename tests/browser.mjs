@@ -8,10 +8,10 @@ const server = createServer(async (request,response) => {
   const path = new URL(request.url,'http://localhost').pathname;
   if (path === '/fixture') {
     response.setHeader('Content-Type','text/html');
-    response.end('<meta property="og:video" content="https://cdn.test/meta.mp4"><script type="application/ld+json">{"@type":"VideoObject","contentUrl":"https://cdn.test/json.webm"}</script><video src="blob:https://example.test/id"></video><div id="shadow"></div><div data-video-src="https://cdn.test/data.mp4"></div><a href="https://cdn.test/master.m3u8">Stream</a>');
+    response.end('<meta property="og:video" content="https://cdn.test/meta.mp4"><script type="application/ld+json">{"@type":"VideoObject","contentUrl":"https://cdn.test/json.webm"}</script><video src="blob:https://example.test/id"></video><script>window.player={file:"https://cdn.test/config.m3u8?token=test"}</script><div id="shadow"></div><div data-video-src="https://cdn.test/data.mp4"></div><a href="https://cdn.test/master.m3u8">Stream</a>');
     return;
   }
-  if (!['/popup.html','/popup.css','/popup.js','/inspect.js'].includes(path)) { response.statusCode=404; response.end(); return; }
+  if (!['/popup.html','/popup.css','/popup.js','/inspect.js','/detector.js'].includes(path)) { response.statusCode=404; response.end(); return; }
   response.setHeader('Content-Type',path.endsWith('.js')?'text/javascript':path.endsWith('.css')?'text/css':'text/html');
   response.end(await readFile(`extension${path}`));
 });
@@ -26,8 +26,18 @@ try {
     root.innerHTML='<video src="https://cdn.test/shadow.mp4"></video>';
     Object.defineProperty(root.querySelector('video'),'mediaKeys',{value:{}});
   });
+  await scannerPage.evaluate(()=>{
+    window.observations=[];
+    window.chrome={runtime:{sendMessage:async message=>{window.observations.push(message);return {ok:true};}}};
+  });
+  await scannerPage.addScriptTag({url:`http://127.0.0.1:${server.address().port}/detector.js`});
+  await scannerPage.evaluate(()=>{
+    const video=document.createElement('video');
+    video.src='https://cdn.test/late-video-endpoint';document.body.append(video);
+  });
+  await scannerPage.waitForFunction(()=>window.observations.some(message=>message.type==='media-observed' && message.items.some(item=>item.url.endsWith('late-video-endpoint'))));
   const scanned=await scannerPage.evaluate(scanPage);
-  for (const path of ['meta.mp4','json.webm','data.mp4','shadow.mp4','master.m3u8']) assert.ok(scanned.candidates.some(item=>item.url.endsWith(path)),path);
+  for (const path of ['meta.mp4','json.webm','data.mp4','shadow.mp4','master.m3u8','config.m3u8?token=test']) assert.ok(scanned.candidates.some(item=>item.url.endsWith(path)),path);
   assert.equal(scanned.drm,true);
   assert.ok(scanned.blobCount > 0);
   await scannerPage.close();
@@ -48,8 +58,8 @@ try {
     }}};
   });
   await page.goto(`http://127.0.0.1:${server.address().port}/popup.html`);
-  await page.getByRole('heading',{name:'2 video kaynağı bulundu'}).waitFor();
-  assert.equal(await page.locator('article').count(),2);
+  await page.getByRole('heading',{name:'4 video kaynağı bulundu'}).waitFor();
+  assert.equal(await page.locator('article').count(),4);
   assert.equal(await page.locator('article img').count(),0);
   assert.ok(!(await page.locator('body').innerText()).includes('secret=123'));
   await page.getByRole('button',{name:'↓ Videoyu indir',exact:true}).click();
@@ -57,14 +67,16 @@ try {
   await page.screenshot({path:'artifacts/popup.png'});
   assert.equal(await page.getByRole('button',{name:'DRM/koruma işareti · indirilemiyor'}).isDisabled(),true);
   assert.equal(await page.locator('article').filter({hasText:'tiny.mp4'}).count(),0);
-  assert.equal(await page.locator('article').filter({hasText:'unknown.mp4'}).count(),0);
+  assert.equal(await page.locator('article').filter({hasText:'unknown.mp4'}).count(),1);
+  await page.locator('article').filter({hasText:'master.m3u8'}).getByRole('button',{name:'↓ Yardımcıyla indir',exact:true}).click();
+  await page.getByRole('status').filter({hasText:'yardımcı kurulu değil'}).waitFor();
   await page.getByRole('button',{name:'Bu sayfayı yardımcıyla indir'}).click();
   const messages=await page.evaluate(()=>window.messages);
-  assert.equal(messages.filter(m=>m.type==='native').length,1);
+  assert.equal(messages.filter(m=>m.type==='native').length,2);
   assert.equal(messages.at(-1).url,'https://example.test/watch');
   await page.evaluate(()=>chrome.runtime.sendMessage=async()=>({items:[]}));
   await page.getByRole('button',{name:'Yenile'}).click();
-  await page.getByRole('heading',{name:'10 MB ve üzeri video bulunamadı'}).waitFor();
+  await page.getByRole('heading',{name:'Henüz video kaynağı bulunamadı'}).waitFor();
   await page.evaluate(()=>chrome.runtime.sendMessage=async()=>({error:'Erişim engellendi'}));
   await page.getByRole('button',{name:'Yenile'}).click();
   await page.getByRole('status').filter({hasText:'Erişim engellendi'}).waitFor();

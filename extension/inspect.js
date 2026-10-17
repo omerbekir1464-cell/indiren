@@ -21,7 +21,13 @@ export function manifestProtection(text) {
 }
 
 export function visibleMedia(item) {
-  return !item.invalidMedia && item.format !== 'stream' && Number.isSafeInteger(item.bytes) && item.bytes >= MIN_BYTES;
+  if (item.invalidMedia) return false;
+  if (item.format === 'stream') return true; // A manifest is not the video itself.
+  return !Number.isSafeInteger(item.bytes) || item.bytes >= MIN_BYTES;
+}
+
+export function downloadableMedia(item) {
+  return !item.invalidMedia && !['stream','video'].includes(item.format) && Number.isSafeInteger(item.bytes) && item.bytes >= MIN_BYTES;
 }
 
 export function videoSignature(bytes) {
@@ -52,10 +58,11 @@ export async function inspectResource(item, fetcher = fetch, verify = false) {
     try {
       const response = await fetcher(item.url,{headers:{Range:'bytes=0-63'},credentials:'include',cache:'no-store',signal});
       const result = metadata(response);
-      if (result.invalidMedia || ![200,206].includes(response.status) || !response.body) {
+      if (![200,206].includes(response.status) || !response.body) {
         await response.body?.cancel();
-        return {bytes:null,invalidMedia:true};
+        return {probeError:'access'};
       }
+      if (result.invalidMedia) { await response.body.cancel(); return result; }
       reader = response.body.getReader();
       const prefix = new Uint8Array(64);
       let length = 0;

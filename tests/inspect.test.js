@@ -1,13 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
-import {MIN_BYTES,totalBytes,manifestProtection,visibleMedia,inspectResource,videoSignature} from '../extension/inspect.js';
+import {MIN_BYTES,totalBytes,manifestProtection,visibleMedia,downloadableMedia,inspectResource,videoSignature} from '../extension/inspect.js';
 
 const headers = values => Object.entries(values).map(([name,value])=>({name,value}));
-test('10 MB boundary excludes tiny, unknown and playlist sizes',()=>{
-  for (const bytes of [null,undefined,NaN,0,1024,9999999]) assert.equal(visibleMedia({format:'mp4',bytes}),false);
+test('10 MB filter hides known-small files while streams and unknown sizes remain visible',()=>{
+  for (const bytes of [0,1024,9999999]) assert.equal(visibleMedia({format:'mp4',bytes}),false);
+  for (const bytes of [null,undefined,NaN]) {
+    assert.equal(visibleMedia({format:'mp4',bytes}),true);
+    assert.equal(downloadableMedia({format:'mp4',bytes}),false);
+  }
   assert.equal(visibleMedia({format:'mp4',bytes:MIN_BYTES}),true);
-  assert.equal(visibleMedia({format:'stream',bytes:20000000}),false);
+  assert.equal(visibleMedia({format:'stream',bytes:1024}),true);
+  assert.equal(downloadableMedia({format:'stream',bytes:20000000}),false);
   assert.equal(visibleMedia({format:'mp4',bytes:20000000,invalidMedia:true}),false);
 });
 test('partial response uses full Content-Range, never fragment Content-Length',()=>{
@@ -55,4 +60,11 @@ test('real HTTP metadata fallback, prefix verification, small/HTML rejection and
     assert.equal(drm.drm,'Widevine');assert.equal(drm.bytes,undefined);
     assert.ok(requests.some(r=>r.method==='GET' && r.range==='bytes=0-63'));
   } finally {await new Promise(resolve=>server.close(resolve));}
+});
+
+test('blocked metadata request does not erase a detected source',async()=>{
+  const result=await inspectResource({url:'https://site.test/private.mp4',format:'mp4'},async()=>new Response('Forbidden',{status:403}));
+  assert.equal(result.invalidMedia,undefined);
+  assert.equal(visibleMedia({format:'mp4',bytes:null,...result}),true);
+  assert.equal(downloadableMedia({format:'mp4',bytes:null,...result}),false);
 });

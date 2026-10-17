@@ -42,7 +42,8 @@ try {
     return await chrome.runtime.sendMessage({type:'scan',tabId:tab.id});
   });
   assert.equal(result.error,undefined,JSON.stringify(result));
-  assert.equal(result.items.length,0);
+  assert.equal(result.items.length,1);
+  assert.equal(result.items[0].format,'stream');
   assert.equal(result.diagnostics.small,1);
   assert.equal(result.diagnostics.unknown,1);
   // Tiny generated fixture must be detected but excluded by the 10 MB filter.

@@ -1,5 +1,5 @@
 import { classify, filename } from './media.js';
-import { totalBytes, inspectResource, visibleMedia } from './inspect.js';
+import { totalBytes, inspectResource, visibleMedia, downloadableMedia } from './inspect.js';
 import { scanPage } from './scanner.js';
 
 // Session storage survives service worker suspension, but not browser shutdown.
@@ -16,9 +16,10 @@ async function remember(tabId, candidates) {
   const existing = await read(tabId);
   const items = new Map(existing.map(item => [item.url, item]));
   for (const candidate of candidates) {
-    const format = classify(candidate.url, candidate.mime);
-    if (format) {
+    const detected = classify(candidate.url, candidate.mime);
+    if (detected) {
       const previous = items.get(candidate.url) || {};
+      const format = detected === 'video' && previous.format ? previous.format : detected;
       const bytes = format === 'stream' ? null : candidate.bytes ?? previous.bytes ?? null;
       items.set(candidate.url, {...previous,url:candidate.url,format,source:candidate.source || previous.source,bytes,invalidMedia:candidate.bytes != null ? false : previous.invalidMedia || false});
     }
@@ -66,6 +67,11 @@ chrome.downloads.onChanged.addListener(delta => {
 
 chrome.runtime.onMessage.addListener((message, sender, respond) => {
   if (sender.id !== chrome.runtime.id) return;
+  if (message.type === 'media-observed' && sender.tab?.id >= 0 && Array.isArray(message.items)) {
+    const items = message.items.slice(0,25).filter(item => item && typeof item.url === 'string' && item.url.length <= 16000).map(item => ({url:item.url,mime:typeof item.mime === 'string' ? item.mime.slice(0,100) : '',source:'Canlı sayfa gözlemi'}));
+    serial(() => remember(sender.tab.id,items)).then(() => respond({ok:true}), () => respond({ok:false}));
+    return true;
+  }
   if (message.type === 'drm-detected' && sender.tab?.id >= 0) {
     serial(() => chrome.storage.session.set({[`${key(sender.tab.id)}:drm`]:true})).then(() => respond({ok:true}), () => respond({ok:false}));
     return true;
@@ -134,9 +140,9 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
     if (message.type === 'download') {
       await queue;
       const item = (await read(tab.id)).find(item => item.url === message.url);
-      if (!item || !visibleMedia(item) || item.drm) throw new Error('Bu kaynak doğrudan indirilemiyor.');
+      if (!item || !downloadableMedia(item) || item.drm) throw new Error('Bu kaynak doğrudan indirilemiyor.');
       const fresh = await inspectResource(item,fetch,true);
-      if (!visibleMedia({...item,bytes:null,...fresh})) throw new Error('İndirme durduruldu: 10 MB ve üzeri gerçek video boyutu doğrulanamadı. Bağlantı süresi dolmuş olabilir.');
+      if (!downloadableMedia({...item,bytes:null,...fresh})) throw new Error('İndirme durduruldu: 10 MB ve üzeri gerçek video boyutu doğrulanamadı. Bağlantı süresi dolmuş olabilir.');
       const id = await chrome.downloads.download({url:item.url,filename:filename(item.url,item.format),saveAs:true,conflictAction:'uniquify'});
       await chrome.storage.session.set({[`download:${id}`]:{tabId:tab.id}});
       const problem = await auditDownload(id);

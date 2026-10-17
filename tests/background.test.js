@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 import {classify,filename} from '../extension/media.js';
-import {totalBytes,inspectResource,visibleMedia} from '../extension/inspect.js';
+import {totalBytes,inspectResource,visibleMedia,downloadableMedia} from '../extension/inspect.js';
 import {scanPage} from '../extension/scanner.js';
 
 test('worker stores network discoveries, validates requests, downloads and clears closed tabs', async () => {
@@ -24,15 +24,20 @@ test('worker stores network discoveries, validates requests, downloads and clear
     const prefix=new Uint8Array(64);prefix.set([102,116,121,112],4);
     return new Response(prefix,{status:206,headers:{'content-range':'bytes 0-63/20000000','content-length':'64'}});
   };
-  vm.runInNewContext(source,{chrome,URL,classify,filename,totalBytes,visibleMedia,scanPage,fetch:fakeFetch,inspectResource:(item,unused,verify)=>inspectResource(item,fakeFetch,verify)});
+  vm.runInNewContext(source,{chrome,URL,classify,filename,totalBytes,visibleMedia,downloadableMedia,scanPage,fetch:fakeFetch,inspectResource:(item,unused,verify)=>inspectResource(item,fakeFetch,verify)});
   const send = message=>new Promise(resolve=>listeners.message(message,{id:'extension-id'},resolve));
   listeners.headers({tabId:1,statusCode:200,url:'https://cdn.test/network',responseHeaders:[{name:'Content-Type',value:'video/webm'}]});
   listeners.headers({tabId:1,statusCode:200,url:'https://cdn.test/master.m3u8',responseHeaders:[]});
   const result=await send({type:'scan',tabId:1});
-  assert.equal(result.items.length,2);
+  assert.equal(result.items.length,3);
+  assert.ok(result.items.some(item=>item.format==='stream'));
   assert.equal(result.diagnostics.unknown,1);
   assert.equal(result.diagnostics.blobCount,1);
   assert.equal(result.diagnostics.protected[0],'Widevine');
+  const observed=await new Promise(resolve=>listeners.message({type:'media-observed',items:[{url:'https://cdn.test/network',mime:'video/unknown'},{url:'https://cdn.test/late/endpoint',mime:'video/unknown'}]},{id:'extension-id',tab:{id:1}},resolve));
+  assert.equal(observed.ok,true);
+  assert.equal(store['tab:1'].find(item=>item.url==='https://cdn.test/network').format,'webm');
+  assert.ok(store['tab:1'].some(item=>item.url==='https://cdn.test/late/endpoint'));
   const downloaded=await send({type:'download',tabId:1,url:'https://cdn.test/network'});
   assert.equal(downloaded.id,10);
   assert.equal(downloads[0].filename,'Indiren/network.webm');

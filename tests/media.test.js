@@ -19,3 +19,10 @@ test('creates safe filenames with the detected extension', () => {
   assert.equal(filename('https://test/..%2Fbad%3Fname','webm'),'Indiren/_bad_name.webm');
   assert.equal(filename('https://test/','mp4'),'Indiren/video.mp4');
 });
+
+test('extensionless MIME sources and query-based stream endpoints are recognized',()=>{
+  assert.equal(classify('https://site.test/play?format=m3u8'),'stream');
+  assert.equal(classify('https://site.test/play?file=movie.mp4'),'mp4');
+  assert.equal(classify('https://site.test/opaque','video/unknown'),'video');
+  assert.equal(classify('https://site.test/segment.m4s','video/mp4'),null);
+});
