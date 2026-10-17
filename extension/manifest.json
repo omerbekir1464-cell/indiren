@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "İndiren · Video Bulucu",
+  "version": "0.1.0",
+  "description": "Geçerli sekmedeki doğrudan video bağlantılarını bulur ve indirir.",
+  "minimum_chrome_version": "102",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "downloads",
+    "storage",
+    "webRequest",
+    "nativeMessaging"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Videoları bul"
+  }
+}
