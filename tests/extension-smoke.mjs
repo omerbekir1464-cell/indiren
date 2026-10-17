@@ -42,8 +42,11 @@ try {
     return await chrome.runtime.sendMessage({type:'scan',tabId:tab.id});
   });
   assert.equal(result.error,undefined,JSON.stringify(result));
-  assert.equal(result.items.filter(item=>item.format==='mp4').length,1);
-  assert.equal(result.items.filter(item=>item.format==='stream').length,1);
+  assert.equal(result.items.length,0);
+  assert.equal(result.diagnostics.small,1);
+  assert.equal(result.diagnostics.unknown,1);
+  // Tiny generated fixture must be detected but excluded by the 10 MB filter.
+  // Use the fixture URL explicitly below to verify Chrome's own download API.
   const download = await worker.evaluate(async url => {
     const [tab] = await chrome.tabs.query({active:true,currentWindow:true});
     // Avoid the interactive save dialog in automation by testing the Chrome
@@ -58,7 +61,7 @@ try {
       };
       poll();
     });
-  },result.items.find(item=>item.format==='mp4').url);
+  },`${origin}/video.mp4`);
   assert.equal(download.state,'complete');
   assert.ok(download.bytesReceived > 0);
   const popup = await context.newPage();
@@ -75,7 +78,7 @@ try {
     return await chrome.runtime.sendMessage({type:'download',tabId:tab.id,url:'https://unknown.test/not-found.mp4'});
   });
   assert.match(unsafe.error,/doğrudan indirilemiyor/);
-  console.log('PASS: Chromium MV3 load, DOM/network detection, deduplication, stream classification, real MP4 download, restricted-page feedback, unknown URL rejection');
+  console.log('PASS: Chromium MV3 load, DOM/network detection, 10 MB filtering, stream diagnostics, real MP4 download, restricted-page feedback, unknown URL rejection');
 } finally {
   await context?.close();
   await new Promise(resolve=>server.close(resolve));

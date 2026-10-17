@@ -1,5 +1,6 @@
 export function classify(raw, mime = '') {
   try {
+    if (/^(text\/html|application\/json)(?:;|$)/i.test(mime)) return null;
     const url = new URL(raw);
     if (!['http:', 'https:'].includes(url.protocol)) return null;
     const path = url.pathname.toLowerCase();

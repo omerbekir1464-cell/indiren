@@ -9,6 +9,8 @@ test('rejects non-downloadable protocols and non-video resources', () => {
   for (const value of ['blob:https://test/a','javascript:alert(1)','file:///a.mp4','bad','https://test/a.mp4.exe']) assert.equal(classify(value),null);
 });
 test('identifies HLS and DASH as streams', () => {
+  assert.equal(classify('https://test/a.mpd','application/xml'),'stream');
+  assert.equal(classify('https://test/a.mp4','text/html'),null);
   assert.equal(classify('https://test/a.m3u8?token=1'),'stream');
   assert.equal(classify('https://test/play','application/dash+xml'),'stream');
 });

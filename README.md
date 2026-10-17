@@ -1,6 +1,19 @@
 # İndiren · Chrome video bulucu
 
-Sayfadaki video öğelerini, bağlantıları ve video ağ yanıtlarını algılayan Manifest V3 Chrome eklentisi. Arayüz Türkçedir.
+Sayfadaki video öğelerini, bağlantıları ve video ağ yanıtlarını algılayan Manifest V3 Chrome eklentisi. Arayüz Türkçedir. Chrome 110+ gerekir.
+
+## 0.2.0: küçük dosya sorunu ve ayrıntılı tarama
+
+- Listeye yalnızca toplam boyutu **en az 10.000.000 bayt (10 MB)** doğrulanmış video dosyaları alınır. Küçük dosyalar ve boyutu bilinmeyen bağlantılar gizlenir; sayıları arayüzde açıklanır.
+- `206 Partial Content` yanıtında parça boyutu yerine `Content-Range` toplamı okunur. Sıkıştırılmış yanıtların aktarım boyutu tam video boyutu sayılmaz.
+- Gerekirse HEAD, ardından `Range: bytes=0-63` isteğiyle boyut kontrolü yapılır. Sunucu Range'i yok saysa da gövde okuması başlangıçtan sonra iptal edilir. İndirme öncesinde MP4/WebM/OGG/AVI/FLV/MPEG/TS gibi kapsayıcıların başlangıç imzası kontrol edilir; HTML/JSON hata yanıtları reddedilir. Bu imza kontrolü tam dosyanın bozulmadığını garanti etmez.
+- Chrome ile başlatılan indirmelerde gerçek indirilen yanıt küçük veya HTML/JSON çıkarsa indirme iptal edilir; tamamlanmış küçük dosya otomatik kaldırılmaya çalışılır. Temizleme başarısızlığı yeniden taramada bildirilir. Bu izleme yerel yardımcı indirmelerini kapsamaz.
+- Erişilebilir iframe'lere ek olarak açık shadow DOM, `data-video-*` alanları, Open Graph meta verisi, JSON-LD ve performans kayıtları taranır. En fazla 100 kaynak saklanır; her taramada en fazla 24 kaynak kontrol edilir, en fazla 6 paralel istek kullanılır; istek başına 4 saniye zaman aşımı vardır. Yeni belirsiz kaynaklar için yeniden tarama yapılabilir.
+- HLS/DASH manifest dosyasının birkaç KB olması videonun küçük olduğu anlamına gelmez. Manifest boyutu video boyutu sayılmaz. Toplam medya boyutu doğrulanamadığı için bu bağlantılar listeden gizlenir; sayfanın yardımcıyla indirilmesi ayrı bir seçenektir.
+- En fazla 256 KiB manifest metninde Widevine, PlayReady, FairPlay ve genel koruma işaretleri aranır. Tarayıcıdaki `encrypted` olayları ve mevcut `mediaKeys` durumu da raporlanır. Bu yalnızca bir göstergedir: DRM bulunmadığını kesin olarak ispatlamaz, anahtar/lisans almaz ve koruma aşmaz. HLS ana manifestinde görünmeyip alt listelerde bulunan DRM işaretleri kaçabilir. AES-128 tek başına DRM olarak etiketlenmez.
+
+Güncellerken `chrome://extensions` sayfasında eklentinin **Yeniden yükle** düğmesine basın, ardından video sayfasını yenileyip videoyu oynatın. Yeni şifreli medya dinleyicisi sayfa yenilenmeden eski açık sekmelere eklenmez.
+
 
 - MP4, WebM, MOV, OGV, M4V, MKV, AVI, FLV, MPEG, 3GP ve TS dosyalarını doğrudan Chrome ile indirme.
 - HLS (`m3u8`) / DASH (`mpd`) akışlarını tespit etme; isteğe bağlı yt-dlp + FFmpeg yardımcısıyla indirme ve birleştirme.
@@ -55,7 +68,7 @@ Linux'ta `~/.config/google-chrome/NativeMessagingHosts/com.indiren.downloader.js
 
 ## İzinler ve gizlilik
 
-- HTTP/HTTPS site erişimi ve `webRequest`: sayfalardaki video yanıtlarını gözlemlemek için. İçerik veya istek gövdesi okunmaz.
+- HTTP/HTTPS site erişimi ve `webRequest`: sayfalardaki video yanıtlarını gözlemlemek için. webRequest üzerinden istek/yanıt gövdeleri okunmaz. Ayrı boyut kontrolü isteklerinde video başlangıcı ve sınırlı manifest metni okunabilir; bu istekler Chrome oturum çerezlerini kullanabilir. Çerezler yerel yardımcıya aktarılmaz.
 - `activeTab` / `scripting`: kullanıcı eklentiyi açınca sekme ve erişilebilir çerçevelerde video/bağlantı taramak için.
 - `downloads`: kullanıcının seçtiği dosyayı indirmek için.
 - `storage`: en fazla 100 kaynak/sekme, yalnızca tarayıcı oturumunda tutulur. İmzalı bağlantılar erişim bilgisi içerebilir; harici analitik veya sunucuya gönderilmez.
@@ -76,10 +89,16 @@ python3 tests/prepare_fixture.py
 .venv/bin/python tests/native_test.py
 ```
 
-`test:ui` sistem Chromium'unu kullanır (`CHROME_PATH` ile değiştirilebilir), Chrome API'si simüle edilir. Liste, indirme düğmeleri, hata/boş durum ve HTML enjeksiyonuna karşı metin gösterimi kontrol edilir. Native test gerçek yerel HLS videosunu indirir ve FFprobe ile doğrular.
+`test:ui` sistem Chromium'unu kullanır (`CHROME_PATH` ile değiştirilebilir), Chrome API'si simüle edilir. Gerçek DOM, shadow DOM, JSON-LD ve meta taraması; 10 MB filtresi, DRM gösterimi, indirme düğmeleri, hata/boş durum ve HTML enjeksiyonuna karşı metin gösterimi kontrol edilir. HTTP testleri yerel sunucuyla HEAD/Range, 206 toplam boyutu, sahte HTML/video yanıtları ve örnek DRM manifestlerini doğrular; ticari DRM servislerinde test yapılmamıştır. Native test gerçek yerel HLS videosunu indirir ve FFprobe ile doğrular.
 
 ```sh
 npm run test:extension
 ```
 
 Bu ayrı bütünleştirme testi eklenti yüklemeye izin veren Chromium gerektirir. Buradaki yönetilen Chromium eklenti yüklemeyi yönetici politikasıyla engellediğinden bütünleştirme testi **geçmedi**; gerçek Chrome'a kurulum ve native-host kaydı kullanıcı bilgisayarında ayrıca doğrulanmalıdır. Bu kısıt UI/birim testlerini ve gerçek HLS indirme testini etkilemez.
+
+## Küçük dosyalar neden görünüyordu?
+
+Önceki sürüm uzantısı veya video MIME türü uygun olan her URL'yi boyut kontrolü yapmadan listeliyordu. Bu, küçük önizleme/akış parçalarının aday olmasına izin veriyordu. Ayrıca süresi dolan bir bağlantı indirme anında HTML/JSON yanıtı verebilir. Yeni filtre, imza kontrolü ve Chrome indirme izlemesi bu durumlar için eklendi. Belirli bir site adresi paylaşılmadığı için kullanıcının sitesinde birebir doğrulama yapılmadı.
+
+Teknik başvuru: [Content-Range](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Range), [Chrome downloads API](https://developer.chrome.com/docs/extensions/reference/api/downloads), [Encrypted Media Extensions](https://www.w3.org/TR/encrypted-media/).
