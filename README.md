@@ -53,7 +53,7 @@ python3 -m venv .venv
 Python ve PATH üzerinde FFmpeg/FFprobe kurulu olmalı:
 
 ```powershell
-py -m venv .venv
+python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r native\requirements.txt
 .\.venv\Scripts\python.exe -m pip install pyinstaller
 .\.venv\Scripts\python.exe -m PyInstaller --onefile --collect-all yt_dlp --name indiren-host --distpath native/dist --workpath native/build native/host.py
@@ -61,6 +61,32 @@ py -m venv .venv
 ```
 
 Kurucu geçerli kullanıcıya ait Chrome Native Messaging kayıt anahtarını oluşturur; yönetici izni gerekmez. Windows/macOS kurulumu bu Linux bulut ortamında denenmemiştir.
+
+### Video görünüyor ama yardımcıya erişilemiyorsa (Windows)
+
+Listede `.m3u8` görünmesi video algılamanın çalıştığı anlamına gelir. “Yardımcıya erişilemedi” hatası FFmpeg indirmesinden önce Chrome ile yerel EXE arasındaki bağlantıda oluşur. 0.3.1 sürümü Chrome'un hata ayrıntısını ve eklentinin güncel kimliğini gösterir:
+
+- `not found`: native-host kaydı veya manifest dosyası bulunamadı.
+- `forbidden`: kayıttaki `allowed_origins` mevcut eklenti kimliğine izin vermiyor.
+- `Failed to start`: EXE yolu/dosyası veya başlatılması kontrol edilmeli.
+- `exited`: süreç yanıt vermeden kapandı; EXE/protokol kontrol edilmeli.
+
+Eklenti klasörünü değiştirmek veya kaldırıp yeniden eklemek kimliği değiştirebilir. Mevcut EXE'yi yeniden oluşturmadan güncel kimlikle kaydı yenileyebilirsiniz. Proje kökünde PowerShell:
+
+```powershell
+$eklentiKimligi = Read-Host "chrome://extensions sayfasindaki guncel eklenti kimligi"
+.\.venv\Scripts\python.exe native/install.py $eklentiKimligi --exe native/dist/indiren-host.exe
+```
+
+Kaydı ve dosyanın varlığını kontrol etmek için (özel video bağlantısı gerekmez):
+
+```powershell
+$kayit = Get-Content "$env:LOCALAPPDATA\Indiren\com.indiren.downloader.json" -Raw | ConvertFrom-Json
+$kayit.allowed_origins
+Test-Path -LiteralPath $kayit.path
+```
+
+`allowed_origins` içindeki kimlik Chrome'daki güncel kimlikle aynı olmalı; `Test-Path` sonucu `True` olmalıdır. Ardından Chrome'u tamamen kapatıp yeniden açın. `ffmpeg -version` hatası farklı bir aşamadır: FFmpeg'in kurulu olması Native Messaging kaydının doğru olduğu anlamına gelmez.
 
 ### Yardımcıyı kaldırma
 

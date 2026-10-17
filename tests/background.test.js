@@ -5,6 +5,7 @@ import {readFile} from 'node:fs/promises';
 import {classify,filename} from '../extension/media.js';
 import {totalBytes,inspectResource,visibleMedia,downloadableMedia} from '../extension/inspect.js';
 import {scanPage} from '../extension/scanner.js';
+import {nativeError} from '../extension/native-error.js';
 
 test('worker stores network discoveries, validates requests, downloads and clears closed tabs', async () => {
   const listeners={}; const store={}; const downloads=[];
@@ -24,7 +25,7 @@ test('worker stores network discoveries, validates requests, downloads and clear
     const prefix=new Uint8Array(64);prefix.set([102,116,121,112],4);
     return new Response(prefix,{status:206,headers:{'content-range':'bytes 0-63/20000000','content-length':'64'}});
   };
-  vm.runInNewContext(source,{chrome,URL,classify,filename,totalBytes,visibleMedia,downloadableMedia,scanPage,fetch:fakeFetch,inspectResource:(item,unused,verify)=>inspectResource(item,fakeFetch,verify)});
+  vm.runInNewContext(source,{chrome,URL,classify,filename,totalBytes,visibleMedia,downloadableMedia,scanPage,nativeError,fetch:fakeFetch,inspectResource:(item,unused,verify)=>inspectResource(item,fakeFetch,verify)});
   const send = message=>new Promise(resolve=>listeners.message(message,{id:'extension-id'},resolve));
   listeners.headers({tabId:1,statusCode:200,url:'https://cdn.test/network',responseHeaders:[{name:'Content-Type',value:'video/webm'}]});
   listeners.headers({tabId:1,statusCode:200,url:'https://cdn.test/master.m3u8',responseHeaders:[]});
@@ -38,6 +39,15 @@ test('worker stores network discoveries, validates requests, downloads and clear
   assert.equal(observed.ok,true);
   assert.equal(store['tab:1'].find(item=>item.url==='https://cdn.test/network').format,'webm');
   assert.ok(store['tab:1'].some(item=>item.url==='https://cdn.test/late/endpoint'));
+  const disconnectListeners=[];
+  chrome.runtime.connectNative=()=>({
+    onMessage:{addListener:()=>{}},onDisconnect:{addListener:listener=>disconnectListeners.push(listener)},
+    postMessage:()=>{chrome.runtime.lastError={message:'Access to the specified native messaging host is forbidden.'};disconnectListeners.at(-1)();delete chrome.runtime.lastError;}
+  });
+  const refused=await send({type:'native',tabId:1,url:'https://site.test/watch'});
+  assert.match(refused.error,/kimliğine izin vermiyor/);
+  assert.match(refused.error,/extension-id/);
+  assert.match(refused.error,/forbidden/);
   const downloaded=await send({type:'download',tabId:1,url:'https://cdn.test/network'});
   assert.equal(downloaded.id,10);
   assert.equal(downloads[0].filename,'Indiren/network.webm');

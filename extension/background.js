@@ -1,6 +1,7 @@
 import { classify, filename } from './media.js';
 import { totalBytes, inspectResource, visibleMedia, downloadableMedia } from './inspect.js';
 import { scanPage } from './scanner.js';
+import { nativeError } from './native-error.js';
 
 // Session storage survives service worker suspension, but not browser shutdown.
 // Serialize updates to avoid losing simultaneous network discoveries.
@@ -132,7 +133,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
         port.onMessage.addListener(result => { settled = true; resolve(result); port.disconnect(); });
         port.onDisconnect.addListener(() => {
           const error = chrome.runtime.lastError;
-          if (!settled) reject(new Error('İndirme yardımcısına erişilemedi. README’deki yardımcı kurulumunu tamamlayın.'));
+          if (!settled) reject(new Error(nativeError(error?.message,chrome.runtime.id)));
         });
         port.postMessage({url:message.url});
       });

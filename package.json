@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.js",
-    "check": "node --check extension/background.js && node --check extension/popup.js && node --check extension/media.js && node --check extension/inspect.js && node --check extension/scanner.js && node --check extension/detector.js",
+    "check": "node --check extension/background.js && node --check extension/popup.js && node --check extension/media.js && node --check extension/inspect.js && node --check extension/scanner.js && node --check extension/detector.js && node --check extension/native-error.js",
     "test:ui": "node tests/browser.mjs",
     "test:extension": "python3 tests/prepare_fixture.py && node tests/extension-smoke.mjs"
   },
